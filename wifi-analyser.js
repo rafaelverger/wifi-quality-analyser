@@ -1,16 +1,29 @@
 #!/usr/bin/env node
 
+const readline = require('readline');
+
 const startOSXCheck = require('./osx');
 const startTime = +new Date;
 
 const analysisResult = { values: [], summary: null };
 const airportCheck = startOSXCheck(analysisResult);
+
+const clearTerminal = () => {
+  const blank = '\n'.repeat(process.stdout.rows)
+  console.log(blank)
+  readline.cursorTo(process.stdout, 0, 0)
+  readline.clearScreenDown(process.stdout)
+};
+
 const printLog = setInterval(() => {
-  console.log(analysisResult.values[analysisResult.values.length - 1]);
+  clearTerminal();
+  const lastAnalysis = analysisResult.values[analysisResult.values.length - 1];
+  console.log(`Partial analysis result: ${JSON.stringify(lastAnalysis, null, 2)}`);
 }, 1000);
 
 const finish = async (exitCode = 0) => {
   clearInterval(printLog);
+  clearTerminal();
 
   console.log('Finishing program...');
 
