@@ -23,25 +23,37 @@ const printResult = (text, result, clearBefore) => {
     return console.info(JSON.stringify(result));
   }
 
-  const props = [['signal', 'dBm'], ['noise', 'dBm'], ['speed', 'Mbits']];
-  const attributes = ['avg', 'median', 'best', 'worst'];
+  const attributes = ['avg', 'best', 'worst'];
   const attrPad = Math.max.apply(Math, attributes.map(a => a.length));
-  props.forEach(([prop, unity]) => {
-    const isSpeed = prop === 'speed';
-    console.info(`# ${prop}: ${isSpeed ? 'internal network, measured in Mbits' : ''}`)
+  const props = [
+    ['signal', 'dB', [-100, 0], 'higher is better'],
+    ['noise', 'dB', [-120, 0], 'lower is better'],
+    ['speed', 'Mbits']
+  ];
+  props.forEach(([prop, unity, range, info]) => {
+    console.info(`# ${prop}:${info ? ` (${info})` : ''}`);
     attributes.forEach(attr => {
       const title = `${attr.toUpperCase()}${new Array(attrPad - attr.length).fill(' ').join('')}`;
       const value = result[prop][attr];
-      const bar = isSpeed ? '' : `[${new Array(25).fill().map((_, i) => (value >= -1 * (100-i*4)) ? '▓' : ' ').join('')}] `;
+      let bar = '';
+      if (range) {
+        const [min, max] = range;
+        const chunks = 50;
+        const rangeScale = (min-max);
+        const chunkRatio = rangeScale/chunks;
+        const values = new Array(chunks).fill();
+        bar = `[${min}, ${values.map((_, i) => (value >= (min - i*chunkRatio)) ? '▓' : ' ').join('')}, ${max}] `;
+      }
       console.info(`  - ${title} ${bar}${value} (${unity})`);
     });
   });
   console.info(`Connected SSIDs: ${result.connectedSSID}`);
+  console.info(`Avergae connection Quality: ${result.signal.avg - result.noise.avg}`);
 }
 
 const printLog = setInterval(() => {
   const lastAnalysis = analysisResult.values[analysisResult.values.length - 1];
-  printResult('Partial analysis result:', lastAnalysis, true);
+  printResult('Current analysis result:', lastAnalysis, true);
 }, 1000);
 
 const finish = async (exitCode = 0) => {
