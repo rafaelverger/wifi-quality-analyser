@@ -40,7 +40,6 @@ module.exports = (analysisResult) => {
           ...summary,
           [prop]: {
             avg: propValues.reduce((a, b) => a+b)/propValues.length,
-            median: propValues[Math.ceil(propValues.length / 2)],
             best: propValues[propValues.length - 1],
             worst: propValues[0]
           }

@@ -15,10 +15,45 @@ const clearTerminal = () => {
   readline.clearScreenDown(process.stdout)
 };
 
+const printResult = (text, result, clearBefore) => {
+  if (clearBefore) clearTerminal();
+
+  console.info(text);
+  if (result.numChecks === undefined) {
+    return console.info(JSON.stringify(result));
+  }
+
+  const attributes = ['avg', 'best', 'worst'];
+  const attrPad = Math.max.apply(Math, attributes.map(a => a.length));
+  const props = [
+    ['signal', 'dB', [-100, 0], 'higher is better'],
+    ['noise', 'dB', [-120, 0], 'lower is better'],
+    ['speed', 'Mbits']
+  ];
+  props.forEach(([prop, unity, range, info]) => {
+    console.info(`# ${prop}:${info ? ` (${info})` : ''}`);
+    attributes.forEach(attr => {
+      const title = `${attr.toUpperCase()}${new Array(attrPad - attr.length).fill(' ').join('')}`;
+      const value = result[prop][attr];
+      let bar = '';
+      if (range) {
+        const [min, max] = range;
+        const chunks = 50;
+        const rangeScale = (min-max);
+        const chunkRatio = rangeScale/chunks;
+        const values = new Array(chunks).fill();
+        bar = `[${min}, ${values.map((_, i) => (value >= (min - i*chunkRatio)) ? '▓' : ' ').join('')}, ${max}] `;
+      }
+      console.info(`  - ${title} ${bar}${value} (${unity})`);
+    });
+  });
+  console.info(`Connected SSIDs: ${result.connectedSSID}`);
+  console.info(`Avergae connection Quality: ${result.signal.avg - result.noise.avg}`);
+}
+
 const printLog = setInterval(() => {
-  clearTerminal();
   const lastAnalysis = analysisResult.values[analysisResult.values.length - 1];
-  console.log(`Partial analysis result: ${JSON.stringify(lastAnalysis, null, 2)}`);
+  printResult('Current analysis result:', lastAnalysis, true);
 }, 1000);
 
 const finish = async (exitCode = 0) => {
@@ -31,7 +66,7 @@ const finish = async (exitCode = 0) => {
   await airportCheck.stop(exitCode);
   console.debug('Subtasks killed');
 
-  console.info(`Final results are here :)\n ${JSON.stringify(analysisResult.summary, null, 2)}`);
+  printResult('Final results are here :)', analysisResult.summary);
 
   console.log(`Program ended ${exitCode === 0 ? 'sucessfully' : 'prematurely'} within ${(+new Date - startTime)/(60 * 1000)} minutes`);
   process.exit(exitCode);
