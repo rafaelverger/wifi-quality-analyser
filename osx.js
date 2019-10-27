@@ -1,38 +1,54 @@
 const { createSubtask } = require('./subtask');
 
-const summarizeAnalysis = (analysis) => {
-  const signals = analysis.map(v => parseInt(v.agrCtlRSSI)).sort();
-  const speeds = analysis.map(v => parseInt(v.lastTxRate)).sort();
+// analysisResult = {
+//   checks: 0,
+//   signal: { avg: 0, best: 0, worst: 0 },
+//   noise: { avg: 0, best: 0, worst: 0 },
+//   speed: { avg: 0, best: 0, worst: 0 },
+//   connectedSSID: new Set(),
+// }
+
+const parseAirport = (data) => {
+  const parsed = data
+    .split('\n')
+    .map(data => data.trim().split(': '))
+    .reduce((obj, [key, value]) => ({ ...obj, [key]: value }), {});
   return {
-    signal: {
-      avg: (signals.reduce((a,b) => a+b)/signals.length).toFixed(2),
-      best: signals[0],
-      worst: signals.slice(-1)[0],
-    },
-    speed: {
-      avg: (speeds.reduce((a,b) => a+b)/speeds.length).toFixed(2),
-      best: speeds.slice(-1)[0],
-      worst: speeds[0],
-    },
-    connectedSSID: [ ...new Set(analysis.map(v => v.SSID)) ],
-    avgNoise: (analysis.reduce((a,b) => a+parseInt(b.agrCtlNoise), 0)/analysis.length).toFixed(2),
+    signal: parseInt(parsed.agrCtlRSSI),
+    noise: parseInt(parsed.agrCtlNoise),
+    speed: parseInt(parsed.lastTxRate),
+    connectedSSID: parsed.SSID,
   };
 };
 
-const parseAirport = (data) => data
-  .split('\n')
-  .map(data => data.trim().split(': '))
-  .reduce((obj, [key, value]) => ({ ...obj, [key]: value }), {});
 
-
-module.exports = () => {
+module.exports = (analysisResult) => {
   const airportCheck = createSubtask(`
     while x=1; do
       /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I
       sleep 0.5;
     done
   `);
-  airportCheck.onEnd(dataArray => summarizeAnalysis(dataArray.map(data => parseAirport(data.toString()))));
-
+  airportCheck.onData(data => {
+    analysisResult.values.push(parseAirport(data.toString()));
+  });
+  airportCheck.onEnd(() => {
+    analysisResult.summary = {
+      ...['signal', 'noise', 'speed'].reduce((summary, prop) => {
+        const propValues = analysisResult.values.map(v => v[prop]).sort();
+        return {
+          ...summary,
+          [prop]: {
+            avg: propValues.reduce((a, b) => a+b)/propValues.length,
+            median: propValues[Math.ceil(propValues.length / 2)],
+            best: propValues[propValues.length - 1],
+            worst: propValues[0]
+          }
+        };
+      }, {}),
+      connectedSSID: [ ...new Set(analysisResult.values.map(v => v.connectedSSID)) ],
+      numChecks: analysisResult.values.length,
+    };
+  });
   return airportCheck;
 }
