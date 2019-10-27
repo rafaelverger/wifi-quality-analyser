@@ -15,10 +15,33 @@ const clearTerminal = () => {
   readline.clearScreenDown(process.stdout)
 };
 
+const printResult = (text, result, clearBefore) => {
+  if (clearBefore) clearTerminal();
+
+  console.info(text);
+  if (result.numChecks === undefined) {
+    return console.info(JSON.stringify(result));
+  }
+
+  const props = [['signal', 'dBm'], ['noise', 'dBm'], ['speed', 'Mbits']];
+  const attributes = ['avg', 'median', 'best', 'worst'];
+  const attrPad = Math.max.apply(Math, attributes.map(a => a.length));
+  props.forEach(([prop, unity]) => {
+    const isSpeed = prop === 'speed';
+    console.info(`# ${prop}: ${isSpeed ? 'internal network, measured in Mbits' : ''}`)
+    attributes.forEach(attr => {
+      const title = `${attr.toUpperCase()}${new Array(attrPad - attr.length).fill(' ').join('')}`;
+      const value = result[prop][attr];
+      const bar = isSpeed ? '' : `[${new Array(25).fill().map((_, i) => (value >= -1 * (100-i*4)) ? '▓' : ' ').join('')}] `;
+      console.info(`  - ${title} ${bar}${value} (${unity})`);
+    });
+  });
+  console.info(`Connected SSIDs: ${result.connectedSSID}`);
+}
+
 const printLog = setInterval(() => {
-  clearTerminal();
   const lastAnalysis = analysisResult.values[analysisResult.values.length - 1];
-  console.log(`Partial analysis result: ${JSON.stringify(lastAnalysis, null, 2)}`);
+  printResult('Partial analysis result:', lastAnalysis, true);
 }, 1000);
 
 const finish = async (exitCode = 0) => {
@@ -31,7 +54,7 @@ const finish = async (exitCode = 0) => {
   await airportCheck.stop(exitCode);
   console.debug('Subtasks killed');
 
-  console.info(`Final results are here :)\n ${JSON.stringify(analysisResult.summary, null, 2)}`);
+  printResult('Final results are here :)', analysisResult.summary);
 
   console.log(`Program ended ${exitCode === 0 ? 'sucessfully' : 'prematurely'} within ${(+new Date - startTime)/(60 * 1000)} minutes`);
   process.exit(exitCode);
