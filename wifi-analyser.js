@@ -1,13 +1,4 @@
-#!/usr/bin/env node
-
 const readline = require('readline');
-
-const startOSXCheck = require('./osx');
-const startTime = +new Date;
-
-const analysisResult = { values: [], summary: null };
-const airportCheck = startOSXCheck(analysisResult);
-
 const clearTerminal = () => {
   const blank = '\n'.repeat(process.stdout.rows)
   console.log(blank)
@@ -51,34 +42,26 @@ const printResult = (text, result, clearBefore) => {
   console.info(`Avergae connection Quality: ${result.signal.avg - result.noise.avg}`);
 }
 
-const printLog = setInterval(() => {
-  const lastAnalysis = analysisResult.values[analysisResult.values.length - 1];
-  printResult('Current analysis result:', lastAnalysis, true);
-}, 1000);
-
-const finish = async (exitCode = 0) => {
-  clearInterval(printLog);
-  clearTerminal();
-
-  console.log('Finishing program...');
-
-  console.debug('Killing subtasks')
-  await airportCheck.stop(exitCode);
-  console.debug('Subtasks killed');
-
+const finish = async (exitCode = 0, partialPrintingInterval, wifiChecker, analysisResult) => {
+  clearInterval(partialPrintingInterval);
+  await wifiChecker.stop(exitCode);
   printResult('Final results are here :)', analysisResult.summary);
-
-  console.log(`Program ended ${exitCode === 0 ? 'sucessfully' : 'prematurely'} within ${(+new Date - startTime)/(60 * 1000)} minutes`);
-  process.exit(exitCode);
 };
 
-process.on('SIGINT', () => {
-  console.log("Caught interrupt signal");
-  finish(1);
-});
+module.exports = (printPartial) => {
+  const startOSXCheck = require('./osx');
+  const analysisResult = { values: [], summary: null };
+  const wifiChecker = startOSXCheck(analysisResult);
+  let partialPrintingInterval;
 
-console.log('Will analyse wifi connection for 1 hour... ');
-new Promise(r => setTimeout(r, 1 * 60 * 60 * 1000)).then(() => {
-  console.log('It has been a while since we met, right? hehe');
-  finish();
-});
+  if (printPartial) {
+    partialPrintingInterval = setInterval(() => {
+      const lastAnalysis = analysisResult.values[analysisResult.values.length - 1];
+      printResult('Current analysis result:', lastAnalysis, true);
+    }, 1000);
+  }
+
+  return {
+    stop: (exitCode) => finish(exitCode, partialPrintingInterval, wifiChecker, analysisResult)
+  }
+}
